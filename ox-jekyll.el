@@ -40,9 +40,6 @@ description: Instructions on export org file with Jekyll
   :group 'org-export-jekyll
   :type 'boolean)
 
-(defvar org-jekyll-yaml-attr
-  '(layout categories tags published comments date title)
-  "The attributes of yaml front matter")
 
 (defcustom org-jekyll-yaml-layout "post"
   "Default layout used in Jekyll article."
@@ -69,7 +66,7 @@ description: Instructions on export org file with Jekyll
   :group 'org-export-jekyll
   :type 'string)
 
-(defcustom org-jekyll-path nil
+(defcustom org-jekyll-path "~/Desktop/blog/rnaer.github.io/_posts"
   "Default publish dir for Jekyll article."
   :group 'org-export-jekyll
   :type 'string)
@@ -102,7 +99,6 @@ puts \"Hello world\"
   :translate-alist
   '((template . org-jekyll-template) ;; add YAML front matter.
     (src-block . org-jekyll-src-block)
-    (timestamp . org-jekyll-timestamp)
     (inner-template . org-jekyll-inner-template)) ;; force body-only
   :options-alist
   '((:jekyll-path "JEKYLL_PATH" nil org-jekyll-path)
@@ -138,7 +134,7 @@ CONTENTS is the transcoded contents string. INFO is a plist
 holding export options."
   (if org-jekyll-include-yaml-front-matter
       (concat
-       (org-jekyll--yaml-front-matter-print (org-jekyll--yaml-front-matter info))
+       (org-jekyll--yaml-front-matter info)
        contents)
     contents))
 
@@ -163,43 +159,28 @@ holding export options."
 ;;; YAML Front Matter
 
 (defun org-jekyll--yaml-front-matter (info)
-  ;; set in the org file or default to the file name w/o extension
-  (let ((my-hash (make-hash-table :test 'equal)))
-    (mapc (lambda (key)
-	    (puthash key
-		     (plist-get
-		      info
-		      (intern (format ":jekyll-%S" key)))
-		     my-hash))
-	  org-jekyll-yaml-attr)
-    (puthash 'date (plist-get info :date) my-hash)
-    (puthash 'title (plist-get info :title) my-hash)
-    my-hash))
-
-(defun org-jekyll--yaml-front-matter-print (my-hash)
-  (let (value)
+  (let ((title (plist-get info :title))
+        (date  (or (plist-get info :date)
+		   (format-time-string "%Y-%m-%d %a %H:%M:%S"
+				       (current-time))))
+        (layout (plist-get info :jekyll-layout))
+        (categories (plist-get info :jekyll-categories))
+        (published  (plist-get info :jekyll-published))
+	(tags (cons (plist-get info :jekyll-tags)
+		    (plist-get info :tag)))
+        (comments (plist-get info :jekyll-comments)))
     (concat
-     "---\n"
-     (mapconcat (lambda (key)
-		  (setq value (gethash key my-hash))
-		  (if value
-		      (format "%S: %s\n" key value)
-		    ""))
-		org-jekyll-yaml-attr
-		"")
-     "---\n")))
+     "---"
+     "\ntitle: " (org-element-interpret-data title)
+     "\ndate: " (org-element-interpret-data date)
+     "\nlayout: " layout
+     "\ncategories: " categories
+     "\ntags: " (mapconcat 'identity tags ", ")
+     "\npublished: " published
+     "\ncomments: " comments
+     "\n---\n")))
 
 
-;;; Timestamps
-
-(defun org-jekyll-timestamp (timestamp contents info)
-  "Transcode a TIMESTAMP object from Org to HTML.
-CONTENTS is nil.  INFO is a plist holding contextual
-information.
-
-Return empty string."
-  ;; no timestamps
-  "")
 
 ;;; Filename and Date Helper
 
@@ -255,39 +236,46 @@ replacing the heading date."
   (&optional async subtreep visible-only body-only ext-plist)
   "Export current buffer to a HTML buffer adding some YAML front matter."
   (interactive)
-  (if async
-      (org-export-async-start
-          (lambda (output)
-            (with-current-buffer (get-buffer-create "*Org Jekyll HTML Export*")
-              (erase-buffer)
-              (insert output)
-              (goto-char (point-min))
-              (funcall org-html-display-buffer-mode)
-              (org-export-add-to-stack (current-buffer) 'jekyll)))
-        `(org-export-as 'jekyll ,subtreep ,visible-only ,body-only ',ext-plist))
-    (let ((outbuf (org-export-to-buffer
-                   'jekyll "*Org Jekyll HTML Export*"
-                   subtreep visible-only body-only ext-plist)))
-      ;; Set major mode.
-      (with-current-buffer outbuf (set-auto-mode t))
-      (when org-export-show-temporary-export-buffer
-        (switch-to-buffer-other-window outbuf)))))
+  (org-export-to-buffer 'jekyll "*Org Jekyll HTML Export*"
+    async subtreep visible-only body-only ext-plist
+    (lambda () (set-auto-mode t))))
 
 ;;;###autoload
 (defun org-jekyll-export-to-html
   (&optional async subtreep visible-only body-only ext-plist)
   "Export current buffer to a HTML file adding some YAML front matter."
   (interactive)
-  (let* ((extension (concat "." org-html-extension))
-         (file (org-export-output-file-name extension subtreep))
-         (org-export-coding-system org-html-coding-system))
+  (let ((extension (concat "." org-html-extension))
+         ;; (file (org-export-output-file-name extension subtreep))
+	(org-export-coding-system org-html-coding-system)
+	file props heading time)
     ;; add the time stamp prefix required by jekyll to the filename
-    (setq file (concat
-		(file-name-directory file)
-		(format-time-string "%Y-%m-%d-" (current-time))
-		(file-name-nondirectory file)))
-    (org-export-to-file
-	'jekyll file async subtreep visible-only body-only ext-plist)))
+    ;; (setq file (concat
+    ;; 		(file-name-directory file)
+    ;; 		(format-time-string "%Y-%m-%d-" (current-time))
+    ;; 		(file-name-nondirectory file)))
+    (if subtreep
+	(progn (setq heading (org-get-heading 't 't))
+	       (setq time (and (string-match org-ts-regexp-both heading)
+			       (match-string 0 heading)))
+	       (setq heading (replace-regexp-in-string
+			      "[:=\(\)\? \t]" "_"
+			      (replace-regexp-in-string
+			       org-ts-regexp-both "" heading)))
+	       (setq file (expand-file-name
+			   (concat heading extension)
+			   org-jekyll-path))
+	       (setq tag (org-get-tags-at))
+	       (setq props (org-entry-properties))
+
+	       (if ext-plist
+		   (progn (plist-put ext-plist :tag tag)
+			  (plist-put ext-plist :date time))
+		 (setq ext-plist (plist-put ext-plist :tag tag))))
+      (setq file (org-export-output-file-name extension subtreep org-jekyll-path)))
+
+    (org-export-to-file 'jekyll file
+      async subtreep visible-only body-only ext-plist)))
 
 
 
@@ -321,69 +309,6 @@ Return output file name."
 		       "\n#+JEKYLL_TAGS: " tags
                        "\n#+JEKYLL_PUBLISHED: " published
                        "\n\n* \n\n{{{more}}}"))))))
-
-
-
-(defun org-jekyll-export-headline (&optional properties)
-  "Export current headline of cursor position."
-  (interactive "P")
-  (let* ((props      (org-entry-properties))
-	 (time       (or (cdr (assoc "TIMESTAMP_IA" props)) ; inactive timestamp
-		     (cdr (assoc "TIMESTAMP" props))))  ; active timestamp
-	 (tags       (org-get-tags-at))
-	 ;; if any current tag exists in `org-export-exclude-tags'
-	 (private    (catch 'flag
-		       (mapc (lambda (x) (if (member x org-export-exclude-tags)
-					     (throw 'flag t)))
-			     tags)
-		       (throw 'flag nil)))
-	 my-hash)
-    (if private
-	(message "This is a private entry - stopped exporting.")
-      ;; each headline with timestamp can be exported as a jekyll blog post
-      (when time
-	(or properties
-	    (setq properties (org-jekyll-property-list)))
-	(setq my-hash  (org-jekyll--yaml-front-matter properties))
-
-	(mapc (lambda (key)
-		(setq attr (cdr (assoc (symbol-name key) props)))
-		(if attr
-		    (puthash key attr my-hash)))
-	      org-jekyll-yaml-attr)
-	(puthash 'tags (concat (mapconcat 'identity tags " ") " "
-			       (gethash 'tags my-hash))
-		 my-hash)
-
-	(let* ((heading (org-no-properties (org-get-heading 't 't)))
-	       (title  (replace-regexp-in-string
-			;; remove the heading timestamp
-			"\\(\\[\\|<\\)[0-9]\\{4\\}-[0-9]\\{2\\}-[0-9]\\{2\\} \\(Mon\\|Tue\\|Wed\\|Thu\\|Fri\\|Sat\\|Sun\\).*\\(\\]\\|>\\) +"
-			"" heading))
-	       (filename (replace-regexp-in-string
-			  ;; replace awkward char in filename
-			  "[:=\(\)\? \t]" "_" title))
-	       (str-time (if (string-match "\\([[:digit:]\-]+\\) " time)
-			      (match-string 1 time)
-			   (format-time-string "%Y-%m-%d" (current-time))))
-	       (to-file (expand-file-name (format "%s-%s.html" str-time filename)
-					  (plist-get properties :jekyll-path)))
-
-	       (org-buffer (current-buffer))
-
-	       html)
-	  (puthash 'date str-time my-hash)
-	  (puthash 'title title my-hash)
-	  ;; (org-narrow-to-subtree)
-	  ;; (forward-line)
-	  (setq html (org-export-as 'jekyll t nil t nil))
-	  (set-buffer org-buffer)
-	  ;; (widen)
-	  (with-temp-file to-file
-	    (insert (org-jekyll--yaml-front-matter-print my-hash))
-	    (insert html))
-	  (get-buffer org-buffer)
-	  (message "Wrote %s." to-file))))))
 
 
 ;;;###autoload
