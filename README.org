@@ -1,21 +1,20 @@
-* Org-jekyll
+* Org-blog
 ** Introduction
-   org-jekyll is an emacs plugins which can easily create org-mode
-file which name like jekyll posts format and publish org-mode files to
-standard jekyll  posts. org-jekyll-mode also support user to control
-their post's yaml front matter values in org-mode files. 
+   org-blog is an emacs plugins which can easily create org-mode
+file which can be exported to standard Jekyll or Hexo posts.
+org-blog also support user to control their post's yaml
+front matter values in org-mode files. 
 
 ** Installation
    To install this plugins, just clone the source code from github. 
 
    #+BEGIN_SRC sh
-     git clone https://github.com/jsuper/org-jekyll-mode.git   
+     git clone https://github.com/RNAer/org-blog.git   
    #+END_SRC
 
    Then, add org-jekyll to your load-path and enable it:
    #+BEGIN_SRC lisp
      (add-to-list 'load-path "path/to/org-jekyll")   
-     (require 'ox-jekyll)
+     (require 'ox-blog)
    #+END_SRC
 
-   Before you use it, you should settings some variables. Please see below section

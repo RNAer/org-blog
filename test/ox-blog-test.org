@@ -1,0 +1,70 @@
+#+TITLE: Test
+#+DATE: 2014-05-06
+#+OPTIONS: toc:nil num:nil
+#+JEKYLL_TAGS: tag1, tag2
+#+JEKYLL_PATH: /tmp/
+#+JEKYLL_CATEGORIES: cat1
+
+* [2014-05-26 Mon] public entry 			      :TUTORIAL:BOOK:
+  test entry 1 [fn:: test]
+  #+BEGIN_SRC elisp
+ (org-element-map (org-element-property :title headline) 'timestamp 'identity)
+    (org-forward-heading-same-level 1)
+    (cdr (assoc "TIMESTAMP" (org-entry-properties)))
+    (org-no-properties (org-get-heading t t) )
+    (org-get-tags-at)
+    (outline-next-visible-heading 1)
+    (replace-regexp-in-string
+     "[:=\(\)\?]" ""
+     (replace-regexp-in-string
+      "[ \t]" "-" (org-get-heading)))
+    (org-jekyll--get-option info :date)
+    (format "%s" nil)
+
+    (intern 'a) (setq m-hash (make-hash-table :test 'equal))
+    (setq a 1)
+(puthash "b" "b" m-hash)
+(maphash (lambda (k v) (message "%s" v)) m-hash)
+(mapc (lambda (x) (puthash  x (eval x) m-hash))
+	  '(a b))
+(stringp (gethash 'a m-hash))
+(mapc lambda (x) (princ x)
+	  '(a b))
+
+  #+END_SRC
+** foo
+   another entry
+   #+BEGIN_SRC elisp
+     (org-forward-heading-same-level 1)
+     (org-entry-properties)
+     (org-get-tags-at)
+       
+   #+END_SRC
+*** foo2
+    | col1 | col2 |
+    | 3    | 4    |
+* [2014-05-26 Mon] private entry 				       :BOOK:
+  #+BEGIN_SRC elisp
+    (get-timestamp-and-heading)("private entry" . "[2014-05-26 Mon]")
+    (org-no-properties (org-get-heading 't 't))
+    (org-forward-heading-same-level 1)
+    (cdr (assoc "TIMESTAMP" (org-entry-properties)))
+    (org-no-properties (org-get-heading t t) )
+    (org-get-tags-at)
+    (outline-next-visible-heading 1)
+    (replace-regexp-in-string
+     "[:=\(\)\?]" ""[2014-05-29 Thu] 
+     (replace-regexp-in-string
+      "[ \t]" "-" (org-get-heading)))
+    (org-jekyll--get-option info :date)
+    (format "%s" nil)
+(expand-file-name "a/b" "c")(buffer-name)
+    (plist-get (org-jekyll-property-list) :jekyll-path)
+  #+END_SRC
+
+
+* foo test					     :TUTORIAL:QUESTION:BOOK:
+[2014-05-29 Thu]    (cdr (assoc "TIMESTAMP_IA" (org-entry-properties)))
+=人在江湖=
+=age=
+~AGE~
