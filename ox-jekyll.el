@@ -28,8 +28,9 @@ If false, then you should include the yaml front matter like this at the top of 
 layout: post
 title: Org-mode to GitHub pages with Jekyll
 excerpt: Introduce how to use Emacs's Org-mode with Jekyll to generate GitHub Pages
-categories: Emacs
+categories: [lessons, beginner]
 tags: [Emacs, org-mode, GitHub, Jekyll]
+tagline: \"Supporting tagline\"
 date: 2013-09-15 22:08
 comments: true
 keywords: blog
@@ -39,29 +40,37 @@ description: Instructions on export org file with Jekyll
   :group 'org-export-jekyll
   :type 'boolean)
 
+(defvar org-jekyll-yaml-attr
+  '(layout categories tags published comments date title)
+  "The attributes of yaml front matter")
 
-(defcustom org-jekyll-layout "post"
+(defcustom org-jekyll-yaml-layout "post"
   "Default layout used in Jekyll article."
   :group 'org-export-jekyll
   :type 'string)
 
-(defcustom org-jekyll-categories ""
+(defcustom org-jekyll-yaml-categories "other"
   "Default space-separated categories in Jekyll article."
   :group 'org-export-jekyll
   :type 'string)
 
-(defcustom org-jekyll-published "true"
+(defcustom org-jekyll-yaml-tags nil
+  "Default space-separated categories in Jekyll article."
+  :group 'org-export-jekyll
+  :type 'string)
+
+(defcustom org-jekyll-yaml-published "true"
   "Default publish status in Jekyll article."
   :group 'org-export-jekyll
   :type 'string)
 
-(defcustom org-jekyll-path ""
-  "Default publish dir for Jekyll article."
+(defcustom org-jekyll-yaml-comments "true"
+  "Default comments (disqus) flag in Jekyll article."
   :group 'org-export-jekyll
   :type 'string)
 
-(defcustom org-jekyll-comments "true"
-  "Default comments (disqus) flag in Jekyll article."
+(defcustom org-jekyll-path nil
+  "Default publish dir for Jekyll article."
   :group 'org-export-jekyll
   :type 'string)
 
@@ -96,11 +105,12 @@ puts \"Hello world\"
     (timestamp . org-jekyll-timestamp)
     (inner-template . org-jekyll-inner-template)) ;; force body-only
   :options-alist
-  '((:jekyll-layout "JEKYLL_LAYOUT" nil org-jekyll-layout)
-    (:jekyll-categories "JEKYLL_CATEGORIES" nil org-jekyll-categories)
-    (:jekyll-published "JEKYLL_PUBLISHED" nil org-jekyll-published)
-    (:jekyll-path "JEKYLL_PATH" nil org-jekyll-path)
-    (:jekyll-comments "JEKYLL_COMMENTS" nil org-jekyll-comments)))
+  '((:jekyll-path "JEKYLL_PATH" nil org-jekyll-path)
+    (:jekyll-layout "JEKYLL_LAYOUT" nil org-jekyll-yaml-layout)
+    (:jekyll-categories "JEKYLL_CATEGORIES" nil org-jekyll-yaml-categories)
+    (:jekyll-tags "JEKYLL_TAGS" nil org-jekyll-yaml-tags)
+    (:jekyll-published "JEKYLL_PUBLISHED" nil org-jekyll-yaml-published)
+    (:jekyll-comments "JEKYLL_COMMENTS" nil org-jekyll-yaml-comments)))
 
 
 ;;; Internal Filters
@@ -128,7 +138,7 @@ CONTENTS is the transcoded contents string. INFO is a plist
 holding export options."
   (if org-jekyll-include-yaml-front-matter
       (concat
-       (org-jekyll--yaml-front-matter info)
+       (org-jekyll--yaml-front-matter-print (org-jekyll--yaml-front-matter info))
        contents)
     contents))
 
@@ -152,42 +162,33 @@ holding export options."
 
 ;;; YAML Front Matter
 
-(defun org-jekyll--get-option (info property-name &optional default)
-  (let ((property (org-export-data (plist-get info property-name) info)))
-    (format "%s" (if (or (string= property "") (not property))
-		     (or default "")
-		   property))))
-
 (defun org-jekyll--yaml-front-matter (info)
-  (let ((title
-         (org-jekyll--get-option info :title))
-        (date
-         (org-jekyll--get-option info :date
-				 (format-time-string "%Y-%m-%d %a %H:%M:%S"
-						     (current-time))))
-        (layout
-         (org-jekyll--get-option info :jekyll-layout
-				 org-jekyll-layout))
-        (categories
-         (org-jekyll--get-option info :jekyll-categories
-				 org-jekyll-categories))
-        (published
-         (org-jekyll--get-option info :jekyll-published 
-				 org-jekyll-published))
-        (comments
-         (org-jekyll--get-option info :jekyll-comments
-				 org-jekyll-comments)))
-    (unless (equal published "true")
-      (setq title (concat "[PREVIEW] " title)))
+  ;; set in the org file or default to the file name w/o extension
+  (let ((my-hash (make-hash-table :test 'equal)))
+    (mapc (lambda (key)
+	    (puthash key
+		     (plist-get
+		      info
+		      (intern (format ":jekyll-%S" key)))
+		     my-hash))
+	  org-jekyll-yaml-attr)
+    (puthash 'date (plist-get info :date) my-hash)
+    (puthash 'title (plist-get info :title) my-hash)
+    my-hash))
+
+(defun org-jekyll--yaml-front-matter-print (my-hash)
+  (let (value)
     (concat
-     "---"
-     "\ntitle: \"" title
-     "\"\ndate: " date
-     "\nlayout: " layout
-     "\ncategories: " categories
-     "\npublished: " published
-     "\ncomments: " comments
-     "\n---\n")))
+     "---\n"
+     (mapconcat (lambda (key)
+		  (setq value (gethash key my-hash))
+		  (if value
+		      (format "%S: %s\n" key value)
+		    ""))
+		org-jekyll-yaml-attr
+		"")
+     "---\n")))
+
 
 ;;; Timestamps
 
@@ -311,12 +312,13 @@ Return output file name."
 
 ;;;###autoload
 (defun org-jekyll-insert-export-options-template
-  (&optional title date setupfile categories published layout)
+  (&optional title date setupfile categories tags published layout)
   "Insert a settings template for Jekyll exporter."
   (interactive)
-  (let ((layout (or layout org-jekyll-layout))
-        (published (or published org-jekyll-published))
-        (categories (or categories org-jekyll-categories)))
+  (let ((layout     (or layout org-jekyll-yaml-layout))
+        (published  (or published org-jekyll-yaml-published))
+	(tags       (or tags org-jekyll-yaml-tags))
+        (categories (or categories org-jekyll-yaml-categories)))
     (save-excursion
       (insert (format (concat
                        "#+TITLE: " title
@@ -324,69 +326,72 @@ Return output file name."
                        "\n#+SETUPFILE: " setupfile
                        "\n#+JEKYLL_LAYOUT: " layout
                        "\n#+JEKYLL_CATEGORIES: " categories
+		       "\n#+JEKYLL_TAGS: " tags
                        "\n#+JEKYLL_PUBLISHED: " published
                        "\n\n* \n\n{{{more}}}"))))))
 
 
 
 (defun org-jekyll-export-headline (&optional properties)
-  "Export current headline"
-  (interactive "p")
-  (let* ((props (org-entry-properties))
-	 (time (cdr (assoc "TIMESTAMP_IA" props)))
-	 (private (cdr (assoc "private" props)))
-	 (tags (org-get-tags-at)))
+  "Export current headline of cursor position."
+  (interactive "P")
+  (let* ((props      (org-entry-properties))
+	 (time       (or (cdr (assoc "TIMESTAMP_IA" props)) ; inactive timestamp
+		     (cdr (assoc "TIMESTAMP" props))))  ; active timestamp
+	 (tags       (org-get-tags-at))
+	 ;; if any current tag exists in `org-export-exclude-tags'
+	 (private    (catch 'flag
+		       (mapc (lambda (x) (if (member x org-export-exclude-tags)
+					     (throw 'flag t)))
+			     tags)
+		       (throw 'flag nil)))
+	 my-hash)
     (if private
 	(message "This is a private entry - stopped exporting.")
+      ;; each headline with timestamp can be exported as a jekyll blog post
       (when time
-	;; each headline with timestamp can be exported as a
-	;; jekyll blog post
 	(or properties
 	    (setq properties (org-jekyll-property-list)))
+	(setq my-hash  (org-jekyll--yaml-front-matter properties))
 
-	;; (message "time=%s" time)
-	(let* ((heading (org-no-properties (org-get-heading t t)))
-	       (title (replace-regexp-in-string
-		       "[:=\(\)\? \t]" "_"
-		       ;; remove the heading timestamp
-		       (substring heading 17)))
-	       (str-time (and (string-match "\\([[:digit:]\-]+\\) " time)
-			      (match-string 1 time)))
-	       (to-file (expand-file-name (format "%s-%s.html" str-time title)
-					  (or (plist-get properties :jekyll-path)
-					      org-jekyll-path)))
+	(mapc (lambda (key)
+		(setq attr (cdr (assoc (symbol-name key) props)))
+		(if attr
+		    (puthash key attr my-hash)))
+	      org-jekyll-yaml-attr)
+	(puthash 'tags (concat (mapconcat 'identity tags " ") " "
+			       (gethash 'tags my-hash))
+		 my-hash)
+
+	(let* ((heading (org-no-properties (org-get-heading 't 't)))
+	       (title  (replace-regexp-in-string
+			;; remove the heading timestamp
+			"\\(\\[\\|<\\)[0-9]\\{4\\}-[0-9]\\{2\\}-[0-9]\\{2\\} \\(Mon\\|Tue\\|Wed\\|Thu\\|Fri\\|Sat\\|Sun\\).*\\(\\]\\|>\\) +"
+			"" heading))
+	       (filename (replace-regexp-in-string
+			  ;; replace awkward char in filename
+			  "[:=\(\)\? \t]" "_" title))
+	       (str-time (if (string-match "\\([[:digit:]\-]+\\) " time)
+			      (match-string 1 time)
+			   (format-time-string "%Y-%m-%d" (current-time))))
+	       (to-file (expand-file-name (format "%s-%s.html" str-time filename)
+					  (plist-get properties :jekyll-path)))
+
 	       (org-buffer (current-buffer))
-	       ;; (org-time-stamp-custom-formats
-	       ;;  '("<%m/%d/%y %a>" . ""))
-	       ;; (org-display-custom-times t)
-	       html)
-	  (org-narrow-to-subtree)
-	  (setq html (org-export-as 'jekyll nil nil t nil))
-	  (set-buffer org-buffer)
-	  (widen)
-	  (with-temp-file to-file
-	    (insert (format
-		     "---\ntitle: \"%s\"
-date: %s
-layout: %s
-categories: %s
-published: %s
-comments: %s
----\n" 
-		     title
-		     str-time
-		     (or (plist-get properties :jekyll-layout)
-			 org-jekyll-layout)
-		     (or (plist-get properties :jekyll-categories)
-			 org-jekyll-categories)
-		     (or (plist-get properties :jekyll-published)
-			 org-jekyll-published)
-		     (or (plist-get properties :jekyll-comments)
-			 org-jekyll-comments)))
 
+	       html)
+	  (puthash 'date str-time my-hash)
+	  (puthash 'title title my-hash)
+	  ;; (org-narrow-to-subtree)
+	  ;; (forward-line)
+	  (setq html (org-export-as 'jekyll t nil t nil))
+	  (set-buffer org-buffer)
+	  ;; (widen)
+	  (with-temp-file to-file
+	    (insert (org-jekyll--yaml-front-matter-print my-hash))
 	    (insert html))
 	  (get-buffer org-buffer)
-	  (message "Exported entry: %s." title))))))
+	  (message "Wrote %s." to-file))))))
 
 
 ;;;###autoload
