@@ -286,16 +286,8 @@ replacing the heading date."
 		(file-name-directory file)
 		(format-time-string "%Y-%m-%d-" (current-time))
 		(file-name-nondirectory file)))
-    (if async
-        (org-export-async-start
-            (lambda (f) (org-export-add-to-stack f 'jekyll))
-          (let ((org-export-coding-system org-html-coding-system))
-            `(expand-file-name
-              (org-export-to-file
-               'jekyll ,file ,subtreep ,visible-only ,body-only ',ext-plist))))
-      (let ((org-export-coding-system org-html-coding-system))
-        (org-export-to-file
-         'jekyll file subtreep visible-only body-only ext-plist)))))
+    (org-export-to-file
+	'jekyll file async subtreep visible-only body-only ext-plist)))
 
 
 
