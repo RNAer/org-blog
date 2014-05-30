@@ -48,6 +48,17 @@ for different generators."
   :group 'org-export-blog
   :type 'string)
 
+
+(defcustom org-blog-path
+  (cond ((string= org-blog-engine "jekyll")
+	 "~/Desktop/blog/rnaer.github.io/_posts")
+	(t
+	 "~/Desktop/blog/hexo-blog/source/_posts"))
+  "Default publish dir for Blog article."
+  :group 'org-export-blog
+  :type 'string)
+
+
 (defcustom org-blog-yaml-layout "post"
   "Default layout used in Blog article."
   :group 'org-export-blog
@@ -58,10 +69,6 @@ for different generators."
   :group 'org-export-blog
   :type 'string)
 
-(defcustom org-blog-yaml-tags nil
-  "Default space-separated categories in Blog article."
-  :group 'org-export-blog
-  :type 'string)
 
 (defcustom org-blog-yaml-published "true"
   "Default publish status in Blog article."
@@ -73,14 +80,7 @@ for different generators."
   :group 'org-export-blog
   :type 'string)
 
-(defcustom org-blog-path
-  (cond ((string= org-blog-engine "jekyll")
-	 "~/Desktop/blog/rnaer.github.io/_posts")
-	(t
-	 "~/Desktop/blog/hexo-blog/source/_posts"))
-  "Default publish dir for Blog article."
-  :group 'org-export-blog
-  :type 'string)
+
 
 (defcustom org-blog-use-src-plugin nil
    "If t, org-blog exporter eagerly uses plugins instead of
@@ -116,7 +116,6 @@ puts \"Hello world\"
     (:blog-path "BLOG_PATH" nil org-blog-path)
     (:blog-layout "BLOG_LAYOUT" nil org-blog-yaml-layout)
     (:blog-categories "BLOG_CATEGORIES" nil org-blog-yaml-categories)
-    (:blog-tags "BLOG_TAGS" nil org-blog-yaml-tags)
     (:blog-published "BLOG_PUBLISHED" nil org-blog-yaml-published)
     (:blog-comments "BLOG_COMMENTS" nil org-blog-yaml-comments)))
 
@@ -178,17 +177,19 @@ holding export options."
         (layout (plist-get info :blog-layout))
         (categories (plist-get info :blog-categories))
         (published  (plist-get info :blog-published))
-	(tags (cons (plist-get info :blog-tags)
-		    (plist-get info :tag)))
-        (comments (plist-get info :blog-comments)))
+        (comments (plist-get info :blog-comments))
+	tags)
+    (if (plist-get info :export-options)
+	(setq tags (plist-get info :headtags))
+      (setq tags (append (plist-get info :filetags))))
     (concat
      "---"
      "\ntitle: " (org-element-interpret-data title)
      "\ndate: " (org-element-interpret-data date)
      "\nlayout: " layout
-     "\ncategories: " categories
-     "\ntags: " (mapconcat 'identity tags ", ")
-     "\npublished: " published
+     "\ncategories: [" categories
+     "]\ntags: [" (mapconcat 'identity tags ", ")
+     "]\npublished: " published
      "\ncomments: " comments
      "\n---\n")))
 
@@ -220,7 +221,8 @@ holding export options."
 
 Example: (org-blog-property '(:blog-layout) \"index.org\")"
   (let ((plist (org-blog-property-list filename)))
-    (mapcar (lambda (key) (org-export-data-with-backend (plist-get plist key) 'blog plist))
+    (mapcar (lambda (key)
+	      (org-export-data-with-backend (plist-get plist key) 'blog plist))
             keys)))
 
 (defun org-blog-date-from-property (&optional filename)
@@ -260,7 +262,7 @@ replacing the heading date."
   (let ((extension (concat "." org-html-extension))
          ;; (file (org-export-output-file-name extension subtreep))
 	(org-export-coding-system org-html-coding-system)
-	file props heading time)
+	file props heading time headtags)
 
     (if subtreep
 	(progn (setq heading (org-get-heading 't 't))
@@ -273,13 +275,13 @@ replacing the heading date."
 	       (setq file (expand-file-name
 			   (concat heading extension)
 			   org-blog-path))
-	       (setq tag (org-get-tags-at))
+	       (setq headtags (org-get-tags-at))
 	       (setq props (org-entry-properties))
 
 	       (if ext-plist
-		   (progn (plist-put ext-plist :tag tag)
+		   (progn (plist-put ext-plist :headtags headtags)
 			  (plist-put ext-plist :date time))
-		 (setq ext-plist (plist-put ext-plist :tag tag))))
+		 (setq ext-plist (plist-put ext-plist :headtags headtags))))
       (setq file (org-export-output-file-name extension subtreep org-blog-path)))
     ;; add the time stamp prefix required by Jekyll to the filename
     (if (string= org-blog-engine "jekyll")
@@ -310,7 +312,6 @@ Return output file name."
   (interactive)
   (let ((layout     (or layout org-blog-yaml-layout))
         (published  (or published org-blog-yaml-published))
-	(tags       (or tags org-blog-yaml-tags))
         (categories (or categories org-blog-yaml-categories)))
     (save-excursion
       (insert (concat
@@ -319,7 +320,6 @@ Return output file name."
 	       "\n#+SETUPFILE: " setupfile
 	       "\n#+BLOG_LAYOUT: " layout
 	       "\n#+BLOG_CATEGORIES: " categories
-	       "\n#+BLOG_TAGS: " tags
 	       "\n#+BLOG_PUBLISHED: " published
 	       "\n\n* \n")))))
 
